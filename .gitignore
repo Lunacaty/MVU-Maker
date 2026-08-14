@@ -1,0 +1,23 @@
+# 依赖与构建产物
+node_modules
+dist
+out
+release
+
+# 日志与缓存
+*.log*
+.eslintcache
+.DS_Store
+Thumbs.db
+
+# 本地工具/个人配置（与本项目无关，不推送）
+.dsh
+.vscode
+*.code-workspace
+
+# 敏感信息（防御性：任何本地密钥/会话文件都不入库）
+.env
+.env.*
+*.pem
+*.key
+session-project.json
