@@ -21,7 +21,17 @@ const typeOptions: { id: OpeningType; label: string; desc: string }[] = [
 ]
 
 // 预览：混合/创建卡片时在正文中应用"临时正则"（把用户自定义查找目标替换为卡片 HTML）；
-// 纯文字直接显示
+// 纯文字直接显示。填充的 initvar YAML 以折叠块追加在正文之后。
+const initvarPreviewHtml = computed(() => {
+  const o = editing.value
+  if (!o?.initvarOverride?.trim()) return ''
+  const yaml = o.initvarOverride.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return `<details open style="margin:10px;border:1px solid #3a4a63;border-radius:8px;background:#0d1320">
+    <summary style="padding:6px 10px;color:#ffc94d;font-weight:bold;cursor:pointer;font-size:12px">initvar 初始变量（导出时嵌入 &lt;UpdateVariable&gt;）</summary>
+    <pre style="margin:0;padding:10px;color:#9fd3ff;font-family:Consolas,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap">${yaml}</pre>
+  </details>`
+})
+
 const previewHtml = computed(() => {
   const o = editing.value
   if (!o) return ''
@@ -34,17 +44,18 @@ const previewHtml = computed(() => {
     const parts = text.split(target)
     return parts.map((seg, i) => (i < parts.length - 1 ? esc(seg) + html : esc(seg))).join('')
   }
+  const initBlock = initvarPreviewHtml.value
   if (o.type === 'createCard') {
     const body = applyTempCard(o.text)
     if (!body.trim()) {
-      return `<body style="margin:0;background:#000;color:#fff"><div style="padding:10px;color:#666">在正文中写入查找目标 ${esc(o.createCardFindTarget || PLACEHOLDER_CREATE_CARD)} 以预览角色创建卡片</div></body>`
+      return `<body style="margin:0;background:#000;color:#fff"><div style="padding:10px;color:#666">在正文中写入查找目标 ${esc(o.createCardFindTarget || PLACEHOLDER_CREATE_CARD)} 以预览角色创建卡片</div>${initBlock}</body>`
     }
-    return `<body style="margin:0;background:#000;color:#fff">${body}</body>`
+    return `<body style="margin:0;background:#000;color:#fff">${body}${initBlock}</body>`
   }
   if (o.type === 'mixed') {
-    return `<body style="margin:0;background:#000;color:#fff;padding:10px;font-size:13px">${applyTempCard(o.text)}</body>`
+    return `<body style="margin:0;background:#000;color:#fff;padding:10px;font-size:13px">${applyTempCard(o.text)}${initBlock}</body>`
   }
-  return `<body style="margin:0;background:#000;color:#fff;padding:10px;font-size:13px">${esc(o.text)}</body>`
+  return `<body style="margin:0;background:#000;color:#fff;padding:10px;font-size:13px">${esc(o.text)}${initBlock}</body>`
 })
 
 function addOpening(): void {
