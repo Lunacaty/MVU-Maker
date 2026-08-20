@@ -215,13 +215,18 @@ function nodeToZod(canvas: SchemaCanvas, node: SchemaNode, indent = 2): string {
     case 'object':
     case 'record':
     case 'root': {
-      // record：key（默认 string）+ value（标量 value 子节点优先，否则 object 字段集合）
+      // record：key + value。value 规则：
+      //   - isRecordValue 标量子节点（反推 z.record(key, 标量) 产生）→ 直接该子节点
+      //   - 唯一子节点 → 直接该子节点（object → 其字段集合；标量 → 该类型本身），不加 object 中间层
+      //   - ≥2 个子节点 → 自动 z.object({...}) 作为中间层（手动 object 子节点则由"唯一子节点"规则覆盖）
       const valueChild = node.type === 'record' ? members.find((m) => m.isRecordValue) : undefined
       const keyPrefix = node.type === 'record' ? `z.record(${recordKeyCode(node)}, ` : ''
       const suffix = node.type === 'record' ? ')' : ''
       let valueCode: string
       if (valueChild) {
         valueCode = nodeToZod(canvas, valueChild, indent + 2)
+      } else if (node.type === 'record' && members.length === 1) {
+        valueCode = nodeToZod(canvas, members[0], indent + 2)
       } else {
         const inner = members.length
           ? members
@@ -599,9 +604,10 @@ function makeNodeFromAst(
     node.recordKeyDescribe = ast.recordKeyDescribe
     const valAst = ast.recordValueAst
     if (valAst?.kind === 'object') {
-      for (const f of valAst.fields ?? []) {
-        makeNodeFromAst(canvas, f.name, f.expr, node.id, node.position)
-      }
+      // object value：以"手动 object"方式表示 —— record 下挂一个 object 子节点，字段递归挂其下。
+      // 生成时唯一 object 子节点 → z.object({字段...})，不加多余中间层，保证 z.record 往返一致
+      // （z.record(key, z.object({a})) 反推 → record[value(object)[a]] → 再生成仍是该式）。
+      makeNodeFromAst(canvas, 'value', ast.recordValueExpr!, node.id, node.position)
     } else if (ast.recordValueExpr) {
       // 标量 value（string/number/boolean/enum 等）：生成一个 isRecordValue 子节点作为 value 槽位
       const valueChild = makeNodeFromAst(canvas, '', ast.recordValueExpr, node.id, node.position)
@@ -763,7 +769,8 @@ export function walkFields(
 ): { path: string; node: SchemaNode }[] {
   const result: { path: string; node: SchemaNode }[] = []
   for (const child of childrenOf(canvas, parentId)) {
-    const path = parentPath ? `${parentPath}.${child.name}` : child.name
+    // isRecordValue 标量槽位节点名为空：路径直接继承父路径（如 背包.{键}）
+    const path = child.name ? (parentPath ? `${parentPath}.${child.name}` : child.name) : parentPath
     result.push({ path, node: child })
     if (child.type === 'object' || child.type === 'record') {
       const suffix = child.type === 'record' ? '.{键}' : ''

@@ -114,17 +114,24 @@ check(magic.type === 'record', '学会的魔法=record')
 const tp = top.find((n) => n.name === '任务面板')!
 const taskList = childrenOf(canvas, tp.id).find((n) => n.name === '任务列表')!
 check(taskList.type === 'record', '任务列表=record')
-check(childrenOf(canvas, taskList.id).length === 5, '任务列表 5 子')
+check(
+  childrenOf(canvas, taskList.id).length === 1 &&
+    childrenOf(canvas, taskList.id)[0]?.type === 'object',
+  '任务列表 object value → 唯一 object 子节点'
+)
 
 const rp = top.find((n) => n.name === '认识的人')!
-check(childrenOf(canvas, rp.id).length === 3, '认识的人 3 子')
+check(
+  childrenOf(canvas, rp.id).length === 1 && childrenOf(canvas, rp.id)[0]?.type === 'object',
+  '认识的人 object value → 唯一 object 子节点'
+)
 
-// 路径全貌
+// 路径全貌（object value 挂在 record 下的 value 子节点，路径带 .value）
 const paths = walkFields(canvas).map((p) => p.path)
 check(
   paths.includes('世界状态.当前幕') &&
-    paths.includes('任务面板.任务列表.{键}.类型') &&
-    paths.includes('认识的人.{键}.对user的态度'),
+    paths.includes('任务面板.任务列表.{键}.value.类型') &&
+    paths.includes('认识的人.{键}.value.对user的态度'),
   '嵌套路径完整'
 )
 

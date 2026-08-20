@@ -97,7 +97,7 @@ console.log('[1] Schema 编解码')
   assert(heroBack?.type === 'object', '反推 object 类型')
   assert(childrenOf(back, heroBack!.id)[0]?.numberConfig?.clampMax === 100, '反推 clamp')
   const paths = walkFields(back).map((p) => p.path)
-  assert(paths.includes('主角.好感度') && paths.includes('背包.{键}.数量'), '路径遍历')
+  assert(paths.includes('主角.好感度') && paths.includes('背包.{键}'), '路径遍历')
 }
 
 // ---- 1.5 record 标量 value 往返（如 NPC: z.record(z.string().describe('NPC名称'), z.string().describe('NPC介绍'))）----

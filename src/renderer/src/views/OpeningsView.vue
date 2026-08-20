@@ -5,6 +5,7 @@ import NoCard from '../components/NoCard.vue'
 import LlmChatPanel from '../components/LlmChatPanel.vue'
 import SandboxIframe from '../components/SandboxIframe.vue'
 import { makeRegex, PLACEHOLDER_CREATE_CARD } from '../../../shared/templates'
+import { canvasToInitvarData, canvasToInitvarYaml } from '../../../shared/schema'
 import type { Opening, OpeningType, RegexScript } from '../../../shared/types'
 
 const project = useProjectStore()
@@ -64,7 +65,7 @@ function removeOpening(o: Opening): void {
   if (editing.value === o) editing.value = null
 }
 
-// 开场白文本辅助：LLM 生成结果 → 写入当前开场白正文
+// 开场白文本辅助：LLM 生成结果 → 写入当前开场白正文，并按 Schema 结构自动附加变量初始化 YAML
 function onLlmResult(content: string): void {
   if (!editing.value) return
   const cleaned = content
@@ -72,6 +73,16 @@ function onLlmResult(content: string): void {
     .replace(/```\s*$/, '')
     .trim()
   editing.value.text = cleaned
+  // 自动附加 initvar：按当前 Schema 结构生成全默认空值 YAML（无需 LLM），
+  // 导出时以 <UpdateVariable><initvar> 块嵌入该开场白末尾
+  if (
+    project.project &&
+    Object.keys(canvasToInitvarData(project.project.schemaCanvas)).length > 0
+  ) {
+    editing.value.initvarOverride = canvasToInitvarYaml(project.project.schemaCanvas)
+    project.statusMessage =
+      '开场白已生成，已自动附加 Schema 变量初始化 YAML（导出时嵌入 <initvar> 块）'
+  }
 }
 
 // 角色创建卡片辅助：LLM 生成结果 → 写入当前开场白的专属卡片 HTML

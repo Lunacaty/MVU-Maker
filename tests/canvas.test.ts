@@ -48,15 +48,17 @@ check(childrenOf(back, hero.id).length === 2, '主角子字段 2')
 // 嵌套：宗门.名称
 const sect = childrenOf(back, hero.id).find((n) => n.name === '宗门')!
 check(childrenOf(back, sect.id)[0]?.name === '名称', '嵌套 宗门.名称')
-// record 子
+// record 子：唯一标量子节点 → value 直接是子节点（z.record(key, z.coerce.number())），反推为 isRecordValue 槽位
 const bag = childrenOf(back, ROOT_NODE_ID).find((n) => n.name === '背包')!
-check(childrenOf(back, bag.id)[0]?.name === '数量', 'record value 子字段')
+const bagChild = childrenOf(back, bag.id)[0]
+check(
+  bagChild?.type === 'number' && bagChild?.isRecordValue === true,
+  'record 唯一标量子节点 = isRecordValue 槽位（无 object 中间层）'
+)
 // 路径
 const paths = walkFields(back).map((p) => p.path)
 check(
-  paths.includes('主角.修为') &&
-    paths.includes('主角.宗门.名称') &&
-    paths.includes('背包.{键}.数量'),
+  paths.includes('主角.修为') && paths.includes('主角.宗门.名称') && paths.includes('背包.{键}'),
   '路径含嵌套'
 )
 // 循环引用检测
@@ -113,11 +115,18 @@ const taskList = childrenOf(real, realTop.find((n) => n.name === '任务面板')
   (n) => n.name === '任务列表'
 )
 check(
-  taskList?.type === 'record' && childrenOf(real, taskList!.id).length === 2,
-  '任务列表 record + 2 子'
+  taskList?.type === 'record' &&
+    childrenOf(real, taskList!.id).length === 1 &&
+    childrenOf(real, taskList!.id)[0]?.type === 'object',
+  '任务列表 object value → 唯一 object 子节点(手动object)'
 )
 const rp = childrenOf(real, realTop.find((n) => n.name === '认识的人')!.id)
-check(rp[0]?.type === 'enum', 'record value 内 enum 类型')
+check(rp.length === 1 && rp[0]?.type === 'object', '认识的人 object value → 唯一 object 子节点')
+const rpFields = childrenOf(real, rp[0]!.id)
+check(
+  rpFields.some((n) => n.type === 'enum'),
+  'record object value 内 enum 类型'
+)
 
 console.log(ok ? '\nALL PASSED' : '\nFAILED')
 process.exit(ok ? 0 : 1)
