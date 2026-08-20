@@ -36,8 +36,14 @@ export function isContainer(node: SchemaNode): boolean {
  *   string → stringPrefault ?? ''；number → numberConfig.prefault ?? 0；boolean → booleanPrefault ?? false；
  *   enum → enumPrefault ?? 首值；object → 递归子字段；record → {}；union/其他 → stringPrefault ?? ''
  * 字段名去掉 _/$ 前缀（MVU 变量名前缀规则），与 zod 代码生成一致。
+ * @param usePrefault 是否采用 schema 上配置的默认值（prefault）。
+ *   true：写入 prefault 值（[InitVar] 世界书条目用，提供可用初值）；
+ *   false：只列出全部字段、值全为空骨架（开场白 initvar override 用——避免与世界书初始化值冲突）。
  */
-export function canvasToInitvarData(canvas: SchemaCanvas): Record<string, unknown> {
+export function canvasToInitvarData(
+  canvas: SchemaCanvas,
+  usePrefault = true
+): Record<string, unknown> {
   const build = (parentId: string): Record<string, unknown> => {
     const out: Record<string, unknown> = {}
     for (const f of childrenOf(canvas, parentId)) {
@@ -50,16 +56,16 @@ export function canvasToInitvarData(canvas: SchemaCanvas): Record<string, unknow
           out[key] = {}
           break
         case 'number':
-          out[key] = f.numberConfig?.prefault ?? 0
+          out[key] = usePrefault ? (f.numberConfig?.prefault ?? 0) : 0
           break
         case 'boolean':
-          out[key] = f.booleanPrefault ?? false
+          out[key] = usePrefault ? (f.booleanPrefault ?? false) : false
           break
         case 'enum':
-          out[key] = f.enumPrefault ?? f.enumValues?.[0] ?? ''
+          out[key] = usePrefault ? (f.enumPrefault ?? f.enumValues?.[0] ?? '') : ''
           break
         default:
-          out[key] = f.stringPrefault ?? ''
+          out[key] = usePrefault ? (f.stringPrefault ?? '') : ''
       }
     }
     return out
@@ -67,9 +73,9 @@ export function canvasToInitvarData(canvas: SchemaCanvas): Record<string, unknow
   return build(ROOT_NODE_ID)
 }
 
-/** initvar YAML：根据 Schema 结构自动生成的默认空值（注入 [InitVar] 世界书条目用） */
-export function canvasToInitvarYaml(canvas: SchemaCanvas): string {
-  return stringify(canvasToInitvarData(canvas))
+/** initvar YAML：根据 Schema 结构自动生成（usePrefault=false 时只列字段、值全空） */
+export function canvasToInitvarYaml(canvas: SchemaCanvas, usePrefault = true): string {
+  return stringify(canvasToInitvarData(canvas, usePrefault))
 }
 
 /** 能收子节点：object/record/root/union（union 的子节点 = 可选类型） */

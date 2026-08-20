@@ -65,7 +65,7 @@ function removeOpening(o: Opening): void {
   if (editing.value === o) editing.value = null
 }
 
-// 开场白文本辅助：LLM 生成结果 → 写入当前开场白正文，并按 Schema 结构自动附加变量初始化 YAML
+// 开场白文本辅助：LLM 生成结果 → 写入当前开场白正文
 function onLlmResult(content: string): void {
   if (!editing.value) return
   const cleaned = content
@@ -73,16 +73,24 @@ function onLlmResult(content: string): void {
     .replace(/```\s*$/, '')
     .trim()
   editing.value.text = cleaned
-  // 自动附加 initvar：按当前 Schema 结构生成全默认空值 YAML（无需 LLM），
-  // 导出时以 <UpdateVariable><initvar> 块嵌入该开场白末尾
-  if (
-    project.project &&
-    Object.keys(canvasToInitvarData(project.project.schemaCanvas)).length > 0
-  ) {
-    editing.value.initvarOverride = canvasToInitvarYaml(project.project.schemaCanvas)
-    project.statusMessage =
-      '开场白已生成，已自动附加 Schema 变量初始化 YAML（导出时嵌入 <initvar> 块）'
+}
+
+/** 按 Schema 结构填充 initvar 骨架：只列出全部字段、值全空（不写 prefault，避免与世界书初始化值冲突） */
+function fillInitvar(): void {
+  if (!editing.value || !project.project) return
+  if (Object.keys(canvasToInitvarData(project.project.schemaCanvas)).length === 0) {
+    project.showToast('Schema 画布为空，无可填充的字段', 'err')
+    return
   }
+  editing.value.initvarOverride = canvasToInitvarYaml(project.project.schemaCanvas, false)
+  project.statusMessage = '已按 Schema 结构填充 initvar 字段骨架（值为空，可手动修改）'
+}
+
+/** 清空 initvar override */
+function clearInitvar(): void {
+  if (!editing.value) return
+  editing.value.initvarOverride = ''
+  project.statusMessage = '已清空 initvar override'
 }
 
 // 角色创建卡片辅助：LLM 生成结果 → 写入当前开场白的专属卡片 HTML
@@ -203,6 +211,15 @@ watch(
 
       <div class="initvar-block">
         <label class="field-label">initvar override（可选，YAML）</label>
+        <div class="initvar-toolbar">
+          <button class="btn btn-ghost btn-sm" @click="fillInitvar">
+            ⬇ 填充（按 Schema 结构）
+          </button>
+          <button class="btn btn-ghost btn-sm" @click="clearInitvar">🗑 清空</button>
+          <span class="hint"
+            >填充仅列出 Schema 全部字段、值为空（不写默认值，避免与世界书初始化冲突）</span
+          >
+        </div>
         <textarea
           v-model="editing.initvarOverride"
           class="text-area yaml-area"
@@ -403,6 +420,17 @@ h3 {
 }
 .yaml-area {
   font-family: Consolas, monospace;
+}
+.initvar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.initvar-toolbar .hint {
+  margin-top: 0;
+  color: #5d6a80;
 }
 .preview-block {
   margin-top: 16px;
