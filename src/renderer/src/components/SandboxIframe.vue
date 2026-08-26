@@ -309,6 +309,17 @@ function buildSrcdoc(html: string): string {
     })
     .replace(/<body[^>]*>/gi, '')
     .replace(/<\/body>/gi, '')
+  // 模拟酒馆渲染管线对状态栏代码块做的一次 HTML 实体反转义（真实酒馆必做，预览必须一致）。
+  // 否则 esc() 等 JS 里写 &amp;/&#39; 实体原文的代码在预览不报错、注入酒馆后 '&#39;'→''' 直接 SyntaxError。
+  inner = inner
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, '\u00A0')
   const initial = JSON.stringify(props.mockData ?? {})
   return `<!doctype html>
 <html lang="zh-CN">

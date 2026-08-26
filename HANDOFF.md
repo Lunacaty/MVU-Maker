@@ -328,3 +328,35 @@ iframe srcdoc 注入 mock 酒馆全局（getVariables/updateVariablesWith/eventO
 2. `npm run typecheck` + `npm test` + `npm run lint` 确认基线全绿
 3. `npm run dev` 启动，导入一张真实 PNG 卡（`E:\Pictures\Tavern\` 下有很多）跑一遍 Schema 编辑/导出
 4. 复现 §8.1 的开场白 Nav bug，定位并修复
+
+---
+
+## 14. 维护提醒（2026-08-26 实战踩坑，务必遵守）
+
+### 14.1 改 `shared/llmPrompts.ts` 的模板字符串注意转义
+
+`STATUSBAR_KNOWLEDGE`/`CREATE_CARD_KNOWLEDGE` 等是**反引号模板字符串**，内部要写字面反引号
+必须写成 `\``（反斜杠+反引号）。**本次 0.2.0 打包就栽在这**：新增铁律段落时内联代码用了
+裸反引号（如 `写 '</script>'`），模板被提前闭合 → `tsc` 报一连串 `TS1005/TS1127`，
+`npm run build:win` 直接在 typecheck 阶段失败。修复方式是把模板内所有内联反引号改回 `\``
+转义、`\x26`/`\x60`/`<\/script>` 这类要展示给 LLM 的转义原样写 `\\x26`/`\\x60`/`\\/script>`
+（双反斜杠，求值后 LLM 看到单反斜杠的正确写法）。
+
+### 14.2 状态栏提示词已内置的两条新铁律（写入 llmPrompts.ts / 04 文档 / 通用mvu构建提示词.txt）
+
+1. **record 类型变量必须平坦访问**（旧模板 `.value` 包裹是坑）：MVU 的 record 变量是
+   `{键:{字段}}` 平坦结构（如 `交际.爱丽丝 = {好感度:80, 等级:3}`）；读写统一走 `recVal(rec,key)`
+   辅助函数（平坦优先、兼容旧 `.value` 只读），**写入一律平坦路径**（`stat_data.交际.爱丽丝.好感度`），
+   永不写 `.value`。违反 → 技能/性癖/交际/圈子/持有/成就等卡片详情全部渲染成 0/空白。
+2. **解析链禁忌**：状态栏是内联 HTML+JS 代码块，代码块内 ① 禁止出现字面 `</script>`
+   （会截断 `<script>` 解析，后半段不执行，需要时写 `<\/script>`）；② 禁止独立反引号行
+   （会提前闭合 tavern-helper 围栏）；③ 所有用户可输入文本（主角名/NPC名/描述/评论/回复对象/
+   模态框标题）渲染一律过 `esc()`/`toDisplayString`，禁止裸拼接。
+3. 沙盒预览 `SandboxIframe.vue` 的 `buildSrcdoc` 已加**一次 HTML 实体反转义模拟**
+   （`&amp;`→`&`、`&#39;`→`'` 等），让预览与酒馆渲染管线行为一致——实体反转义相关的
+   SyntaxError 在预览阶段就能暴露，不用等注入酒馆。
+
+### 14.3 打包命令
+
+- 完整出包：`npm run build:win`（typecheck（node+web）→ electron-vite build → electron-builder
+  → `dist/mvu-maker-<版本>-setup.exe`）。改版本号在 `package.json` 的 `version` 字段。

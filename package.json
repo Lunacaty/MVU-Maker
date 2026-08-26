@@ -1,7 +1,7 @@
 {
   "name": "mvu-maker",
-  "version": "0.1.0",
-  "description": "为已完成的纯文字角色卡一键增强 MVU 变量、状态栏、角色创建卡片，支持世界书/正则/脚本管理与全流程 LLM 辅助",
+  "version": "0.2.0",
+  "description": "涓哄凡瀹屾垚鐨勭函鏂囧瓧瑙掕壊鍗′竴閿寮?MVU 鍙橀噺銆佺姸鎬佹爮銆佽鑹插垱寤哄崱鐗囷紝鏀寔涓栫晫涔?姝ｅ垯/鑴氭湰绠＄悊涓庡叏娴佺▼ LLM 杈呭姪",
   "main": "./out/main/index.js",
   "author": "MVU Maker",
   "scripts": {

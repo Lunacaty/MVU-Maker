@@ -377,10 +377,28 @@ const STATUSBAR_KNOWLEDGE = `## 前置知识：stat_data 对象与状态栏开�
 - **读取指定路径的值**（两种方式等价）：
   _.get(stat, '主角.名字')          // _. 是全局注入的 lodash-like，路径用 . 分隔
   stat['主角']?.['名字']            // 链式访问（注意中间层可能不存在，用可选链）
+- **⚠️ record 类型变量是平坦结构（旧模板大坑，卡片显示 0/空白的根源）**：MVU 的 record 变量为 \`{键: {字段...}}\`，如 \`交际.爱丽丝 = {好感度:80, 等级:3}\`；**严禁**沿用旧模板（恶女攻略系统）的 \`.value\` 包裹读写（\`rec[key].value.字段\` 会全部读空 → 技能/性癖/交际/事务/圈子/持有/成就/战斗参与者 详情渲染成 0/空白）。统一用辅助函数读取（照抄）：
+  \`\`\`js
+  function recVal(rec, key) {
+    const v = rec && (rec[key] ?? rec[key]?.value);   // 平坦优先，兼容旧 .value 包裹（只读兼容）
+    return v && typeof v === 'object' ? v : {};
+  }
+  \`\`\`
+  所有 record 渲染路径一律 \`recVal(rec, key)\` 取值；所有【编辑/删除/JSON Patch】**写入一律平坦路径**：\`_.set(vars, 'stat_data.交际.爱丽丝.好感度', 80)\`、\`_.set(vars, 'stat_data.技能.采补术.描述', 'x')\`（永不写 .value）；变量输出格式里的 JSON Patch 示例同步用平坦路径
 - **写回变量**：
   await updateVariablesWith(vars => { _.set(vars, 'stat_data.主角.名字', '新值'); return vars; }, { type: 'message', message_id: getCurrentMessageId() });
 - **布局**：状态栏整体必须有固定的高度（单位为 px），宽度自定（通常是 100vw）；内容超出时内部滚动，不得撑破楼层
-- **渲染**：字符串拼接 + esc() 转义（防 XSS）；每个函数 try/catch 包裹；setInterval 每 2s 轮询 + \`eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, ...)\` 刷新
+- **渲染**：字符串拼接 + esc() 转义（防 XSS）；每个函数 try/catch 包裹；setInterval 每 2s 轮询 + \`eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, ...)\` 刷新（事件名用属性 Mvu.events.VARIABLE_UPDATE_ENDED，其值为 'mag_variable_update_ended'；严禁写成字符串 'Mvu.events.VARIABLE_UPDATE_ENDED'）
+- **⚠️ HTML 实体反转义（第一铁律，违反必炸）**：状态栏代码块经酒馆渲染管线会被**反转义一次** HTML 实体（&amp;→&、&lt;→<、&gt;→>、&quot;→"、&#39;→'）。因此 **JS 源码禁止出现任何实体原文**——'&#39;' 会被反转义成三个单引号 '''，字符串未闭合 → 整个脚本 SyntaxError → 状态栏只剩静态标题、JS 全不执行。需要输出实体的字符串一律用 **\\x26 十六进制转义**（字符串值不变，但源码不含 & 字符，管线无法反转义；如 '&nbsp;' 要写 '\\x26nbsp;'）。标准 esc() 必须如下（照抄，源码中是单反斜杠 \\x26）：
+  \`\`\`js
+  function esc(val) {
+    return String(val == null ? '' : val)
+      .replace(/&/g,'\\x26amp;').replace(/</g,'\\x26lt;').replace(/>/g,'\\x26gt;')
+      .replace(/"/g,'\\x26quot;').replace(/'/g,'\\x26#39;');
+  }
+  \`\`\`
+- **⚠️ 解析链禁忌（脚本被截断不执行的根源）**：状态栏是内联 HTML+JS 代码块，如下字面字符会提前截断解析链：① JS 字符串禁止出现字面 \`</script>\`（会截断 HTML \`<script>\` 解析，后半段全部不执行）——需要输出该串时写 \`\\/script>\`（反斜杠转义斜杠）；② 代码块内禁止出现独立反引号行（会提前闭合 tavern-helper 围栏）——字符串里含反引号用 \`\\x60\` 转义或拼接；③ **所有用户可输入文本**（主角名/NPC名/技能/事件描述/评论/回复对象/模态框标题等）渲染时一律过 esc()（Vue 前端版用 toDisplayString），**禁止裸拼接**——含 \`<\`/\`>\`/\`\"\`/\`'\`/\`&\` 的文本会注入破坏 HTML 结构、该处不渲染或错位
+- **本地预览正常 ≠ 酒馆正常**：工具预览沙盒已模拟实体反转义，但浏览器直接打开 HTML 文件不经过酒馆管线，实体写法在浏览器里不报错、进酒馆才炸；最终以「注入酒馆实测」为准
 - **动画要求（默认）**：交互时动画丝滑，不得有瞬间变化（数值跳动、颜色/高度突变等都要用 transition/渐变过渡）
 - **启动**：统一用 \`$(errorCatched(init))\`（jQuery 的 DOM ready + 错误包裹器），并在 init 开头 \`await waitGlobalInitialized('Mvu')\`；不用浏览器原生对话框
 
@@ -431,6 +449,9 @@ ${OUTPUT_DISCIPLINE}
 const CREATE_CARD_KNOWLEDGE = `## 前置知识：角色创建卡片开发要点
 - 本质：放在开局消息楼层里的可交互捏人界面，通过正则把占位符替换为 HTML 呈现
 - **完整文档结构**：<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>...</style></head><body>...</body></html>
+- **⚠️ HTML 实体反转义（必守）**：创建卡片代码块经酒馆渲染管线会被反转义一次 HTML 实体（&amp;→&、&#39;→' 等）；**JS 源码禁止写实体原文**——'&#39;' 会变 ''' 导致整段脚本 SyntaxError。实体一律用 \\x26 转义（esc() 里 '&amp;' 写 '\\x26amp;'、'&#39;' 写 '\\x26#39;'）
+- **⚠️ record 平坦结构（同状态栏铁律）**：MVU record 变量为 \`{键: {字段}}\` 平坦结构（如 \`交际.爱丽丝 = {好感度:80}\`）；**禁止**沿用旧模板 \`.value\` 包裹读写（读了全空 → 表单数据显示 0/空白）。读取用 recVal 辅助函数（平坦优先、兼容旧 .value 只读），写入一律平坦路径 \`stat_data.交际.爱丽丝.好感度\`（永不写 .value）；JsonPatch 示例同步平坦
+- **⚠️ 解析链禁忌（同状态栏铁律）**：JS 字符串禁止出现字面 \`</script>\`（写 \`\\/script>\` 反斜杠转义斜杠）；代码块内禁止出现独立反引号行（会提前闭合围栏）；所有用户可输入文本（表单里玩家填的名字/身份/外貌/选项标签等）渲染进 HTML 一律 esc()/toDisplayString，禁止裸拼接
 - **变量写回**：\`await updateVariablesWith(vars => { _.set(vars, 'stat_data.路径', 值); return vars; }, { type: 'message', message_id: getCurrentMessageId() })\`，写入的字段必须在 schema 内
 - **发送消息内容（怎么设定要发的消息）**：需要让 AI 开局时，先发送一条"玩家行动/开局"消息，再触发生成：
   await triggerSlash('/send ' + 要发送的消息内容);   // 发送一条指定内容的用户消息
